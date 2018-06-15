@@ -1,0 +1,37 @@
+{
+    "ports": {
+        "clients": 8123,
+        "command": 8124,
+        "web": 8125
+        },
+    "sso_server": "localhost",
+    "strict": false,
+    "debug": true,
+    "sp": {
+        "entityId": "https://localhost/metadata/",
+        "assertionConsumerService": {
+            "url": "http://localhost:8125/login/acs",
+            "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+        },
+        "singleLogoutService": {
+            "url": "http://localhost:8125/login/sls",
+            "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        },
+        "NameIDFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+        "x509cert": "",
+        "privateKey": ""
+    },
+
+    "idp": {
+        "entityId": "https://idp.example.com/saml/saml2/idp/metadata.php",
+        "singleSignOnService": {
+            "url": "https://idp.example.com/saml/saml2/idp/SSOService.php",
+            "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        },
+        "singleLogoutService": {
+            "url": "https://idp.example.com/saml/saml2/idp/SingleLogoutService.php",
+            "binding": "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+        },
+        "x509cert": "-- PEM cert as one line, no header/footer --"
+    }
+}

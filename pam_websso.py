@@ -4,6 +4,7 @@ from twisted.protocols.policies import TimeoutProtocol, TimeoutFactory
 from twisted.internet import reactor
 from os import path
 import time
+import json
 
 class WebSSOClient(LineReceiver, TimeoutProtocol):
   line = None

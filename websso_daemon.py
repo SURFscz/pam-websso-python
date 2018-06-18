@@ -90,7 +90,10 @@ class Metadata(Resource):
 
     def __init__(self):
         Resource.__init__(self)
-        self.my_base = path.dirname(path.realpath(__file__))
+        my_base = path.dirname(path.realpath(__file__))
+        filename = my_base + "/websso_daemon.json"
+        json_data_file = open(filename, 'r')
+        self.settings = json.load(json_data_file)
 
     def _prepare_from_twisted_request(self, request):
         return {
@@ -103,7 +106,7 @@ class Metadata(Resource):
     def render_GET(self, request):
         request.setHeader(b"content-type", b"text/plain")
         req = self._prepare_from_twisted_request(request)
-        auth = OneLogin_Saml2_Auth(req, custom_base_path=self.my_base)
+        auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
         saml_settings = auth.get_settings()
         metadata = saml_settings.get_sp_metadata()
         errors = saml_settings.validate_metadata(metadata)
@@ -140,7 +143,10 @@ class loginCode(Resource):
         Resource.__init__(self)
         self.code = code
         self.client = client
-        self.my_base = path.dirname(path.realpath(__file__))
+        my_base = path.dirname(path.realpath(__file__))
+        filename = my_base + "/websso_daemon.json"
+        json_data_file = open(filename, 'r')
+        self.settings = json.load(json_data_file)
         print("loginCode: {}".format(code))
 
     def _simplify_args(self, args):
@@ -160,7 +166,7 @@ class loginCode(Resource):
         nonce = INonce(session)
         nonce.code = self.code
         req = self._prepare_from_twisted_request(request)
-        auth = OneLogin_Saml2_Auth(req, custom_base_path=self.my_base)
+        auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
         redirect = auth.login()
         request.redirect(redirect)
         request.finish()
@@ -171,7 +177,7 @@ class loginCode(Resource):
         nonce = INonce(session)
         code = nonce.code
         req = self._prepare_from_twisted_request(request)
-        auth = OneLogin_Saml2_Auth(req, custom_base_path=self.my_base)
+        auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
         auth.process_response()
         errors = auth.get_errors()
         if auth.is_authenticated():
@@ -192,7 +198,7 @@ class Server:
 
     def __init__(self):
         my_base = path.dirname(path.realpath(__file__))
-        filename = my_base + "/settings.json"
+        filename = my_base + "/websso_daemon.json"
         json_data_file = open(filename, 'r')
         self.settings = json.load(json_data_file)
         self.clients = ClientFactory()

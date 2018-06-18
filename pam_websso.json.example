@@ -1,0 +1,6 @@
+{
+    "ports": {
+        "clients": 8123,
+        },
+    "sso_server": "localhost"
+}

@@ -55,7 +55,7 @@ def pam_sm_authenticate(pamh, flags, argv):
 
   # Load client port from settings
   my_base = path.dirname(path.realpath(__file__))
-  filename = my_base + "/settings.json"
+  filename = my_base + "/pam_websso.json"
   json_data_file = open(filename, 'r')
   settings = json.load(json_data_file)
 
@@ -75,11 +75,12 @@ def pam_sm_authenticate(pamh, flags, argv):
   websso = WebSSOFactory(pamh)
   reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
   reactor.run()
-  if websso.client.state == 'end':
+  user = 'fail'
+  result = 'FAILED'
+  try:
     (user, result) = websso.client.line.split(" ")
-  else:
-    user = 'fail'
-    result = 'FAILED'
+  except:
+    pass
 
   pamh.env['reply'] = result
   pamh.user = user

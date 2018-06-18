@@ -4,7 +4,6 @@
         "command": 8124,
         "web": 8125
         },
-    "sso_server": "localhost",
     "strict": false,
     "debug": true,
     "sp": {

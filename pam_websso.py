@@ -9,10 +9,12 @@ import json
 class WebSSOClient(LineReceiver, TimeoutProtocol):
   line = None
   pamh = None
+  settings = None
   state = 'start'
 
-  def __init__(self, pamh):
+  def __init__(self, pamh, settings):
     self.pamh = pamh
+    self.settings = settings
 
   def connectionMade(self):
     self.timeoutCall = reactor.callLater(30, self.transport.loseConnection)
@@ -27,7 +29,7 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     if self.state == 'start':
       msg_type = self.pamh.PAM_PROMPT_ECHO_OFF
       #msg_type = self.pamh.PAM_TEXT_INFO
-      self.pamh.conversation(self.pamh.Message(msg_type, "Visit http://syncope.vm.scz-vm.net:8125/login/%s to login\nand press <enter> to continue." % line))
+      self.pamh.conversation(self.pamh.Message(msg_type, "Visit {} to login\nand press <enter> to continue.".format(self.settings['sso_url']) % line))
       self.state = None
     else:
       self.state = 'end'
@@ -37,17 +39,18 @@ class WebSSOFactory(ClientFactory, TimeoutFactory):
   pamh = None
   client = None
 
+  def __init__(self, pamh, settings):
+    self.pamh = pamh
+    self.settings = settings
+
   def clientConnectionFailed(self, connector, reason):
     reactor.stop()
-
-  def __init__(self, pamh):
-    self.pamh = pamh
 
   def clientConnectionLost(self, connector, reason):
     reactor.stop()
 
   def buildProtocol(self, addr):
-    client = WebSSOClient(self.pamh)
+    client = WebSSOClient(self.pamh, self.settings)
     self.client = client
     return client
 
@@ -72,7 +75,7 @@ def pam_sm_authenticate(pamh, flags, argv):
     #pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Not websso"))
     #return pamh.PAM_IGNORE
 
-  websso = WebSSOFactory(pamh)
+  websso = WebSSOFactory(pamh, settings)
   reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
   reactor.run()
   user = 'fail'

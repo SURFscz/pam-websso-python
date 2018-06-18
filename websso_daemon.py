@@ -138,6 +138,7 @@ class loginCode(Resource):
     isLeaf = True
     code = None
     client = None
+    settings = None
 
     def __init__(self, code, client):
         Resource.__init__(self)

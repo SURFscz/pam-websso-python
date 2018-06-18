@@ -190,7 +190,7 @@ class loginCode(Resource):
         self.client.users.pop(code)
         request.setHeader(b"content-type", b"text/html")
         content = "<html><body>\n"
-        content += u"{}/{} is authenticated\n".format(code, uid)
+        content += u"{}/{} successfully authenticated<br />\n".format(code, uid)
         content += u"This window may be closed\n"
         content += "</body></html>\n"
         return content.encode("ascii")

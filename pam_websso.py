@@ -3,6 +3,8 @@ from twisted.protocols.basic import LineReceiver
 from twisted.protocols.policies import TimeoutProtocol, TimeoutFactory
 from twisted.internet import reactor
 from os import path
+# Future functionality
+#import pyqrcode
 import time
 import json
 
@@ -27,9 +29,15 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
   def lineReceived(self, line):
     self.line = line
     if self.state == 'start':
+      url = self.settings['sso_url'] % line
+      # Future functionality
+      #qrcode = pyqrcode.create(url)
+      #msg = "Visit {} to login\nand press <enter> to continue.{}".format(url,qrcode.terminal(quiet_zone=1))
+      msg = "Visit {} to login\nand press <enter> to continue.".format(url)
       msg_type = self.pamh.PAM_PROMPT_ECHO_OFF
+      # Can be PAM_TEXT_INFO when OpenSSH fixes https://bugzilla.mindrot.org/show_bug.cgi?id=2876
       #msg_type = self.pamh.PAM_TEXT_INFO
-      self.pamh.conversation(self.pamh.Message(msg_type, "Visit {} to login\nand press <enter> to continue.".format(self.settings['sso_url']) % line))
+      self.pamh.conversation(self.pamh.Message(msg_type, msg))
       self.state = None
     else:
       self.state = 'end'

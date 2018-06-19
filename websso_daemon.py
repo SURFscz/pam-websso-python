@@ -184,7 +184,12 @@ class loginCode(Resource):
         if auth.is_authenticated():
             attributes = auth.get_attributes()
             print("attributes: {}".format(attributes))
-            uid = attributes['urn:mace:dir:attribute-def:uid'][0]
+            uid_attr = attributes.get(self.settings.get('user_attribute'))
+            if uid_attr:
+                uid = uid_attr[0]
+            else:
+                uid = ''
+
         self.client.users[code].handleCommand("{} SUCCESS".format(uid))
         print("Destroy %s" % self.code)
         self.client.users.pop(code)

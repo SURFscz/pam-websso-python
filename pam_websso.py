@@ -88,17 +88,17 @@ def pam_sm_authenticate(pamh, flags, argv):
   #reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
   reactor.connectSSL(settings['sso_server'], settings['ports']['clients'], websso, ssl.ClientContextFactory())
   reactor.run()
-  user = 'fail'
+  auth = 'failed'
   result = 'FAILED'
   try:
-    (user, result) = websso.client.line.split(" ")
+    (auth, result) = websso.client.line.split(" ")
   except:
     pass
 
   pamh.env['reply'] = result
-  pamh.user = user
+  #pamh.user = user
 
-  if result == 'SUCCESS':
+  if result == 'SUCCESS' and auth == user:
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Success! %s" % (user)))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " user: {}".format(pamh.get_user(None))))

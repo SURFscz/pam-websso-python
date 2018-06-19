@@ -1,7 +1,8 @@
 from twisted.internet.protocol import ClientFactory
 from twisted.protocols.basic import LineReceiver
 from twisted.protocols.policies import TimeoutProtocol, TimeoutFactory
-from twisted.internet import reactor
+from twisted.internet import reactor, ssl
+from OpenSSL import SSL
 from os import path
 # Future functionality
 #import pyqrcode
@@ -84,7 +85,8 @@ def pam_sm_authenticate(pamh, flags, argv):
     #return pamh.PAM_IGNORE
 
   websso = WebSSOFactory(pamh, settings)
-  reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
+  #reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
+  reactor.connectSSL(settings['sso_server'], settings['ports']['clients'], websso, ssl.ClientContextFactory())
   reactor.run()
   user = 'fail'
   result = 'FAILED'
@@ -121,6 +123,7 @@ def pam_sm_chauthtok(pamh, flags, argv):
   return pamh.PAM_IGNORE
 
 def pam_sm_end(pamh):
+  # OpenSSH does not call pam_sm_end
   #pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
   #pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " user: {}".format(pamh.get_user(None))))
   return pamh.PAM_SUCCESS

@@ -13,11 +13,11 @@ that will serve the SAML SP. The rest of the configuration file is OneLogin Pyth
 Add these lines to /etc/pam.d/sshd
 
 ```
-+ auth     [success=done new_authtok_reqd=done default=ignore user_unknown=ignore] pam_python.so /opt/pam-websso/pam_websso.py
++ auth sufficient pam_python.so /opt/pam-websso/pam_websso.py
   # Standard Un*x authentication.
   @include common-auth
 
-+ session required        pam_mkhomedir.so umask=0022 skel=/etc/skel
++ session required pam_mkhomedir.so umask=0022 skel=/etc/skel
   # Standard Un*x session setup and teardown.
   @include common-session
 ```

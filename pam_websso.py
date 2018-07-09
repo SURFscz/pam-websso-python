@@ -9,6 +9,10 @@ from os import path
 import time
 import json
 
+def debug(line):
+    with open('/var/log/pam_websso.log', 'a') as f:
+        f.write(line+"\n")
+
 class WebSSOClient(LineReceiver, TimeoutProtocol):
   line = None
   pamh = None
@@ -34,12 +38,14 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
       # Future functionality
       #qrcode = pyqrcode.create(url)
       #msg = "Visit {} to login\nand press <enter> to continue.{}".format(url,qrcode.terminal(quiet_zone=1))
-      msg = "Visit {} to login\nand press <enter> to continue.".format(url)
+      msg = "Visit {} to login\nor press <enter> to continue.".format(url)
       msg_type = self.pamh.PAM_PROMPT_ECHO_OFF
       # Can be PAM_TEXT_INFO when OpenSSH fixes https://bugzilla.mindrot.org/show_bug.cgi?id=2876
       #msg_type = self.pamh.PAM_TEXT_INFO
       self.pamh.conversation(self.pamh.Message(msg_type, msg))
       self.state = None
+      # This line makes WebSSO fall-through immediately if user presses enter before login
+      self.transport.loseConnection()
     else:
       self.state = 'end'
       self.transport.loseConnection()
@@ -64,6 +70,8 @@ class WebSSOFactory(ClientFactory, TimeoutFactory):
     return client
 
 def pam_sm_authenticate(pamh, flags, argv):
+  # debugging to /var/log/pam_websso.log
+  #debug("Test")
 
   # Load client port from settings
   my_base = path.dirname(path.realpath(__file__))

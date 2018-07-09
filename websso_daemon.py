@@ -25,15 +25,17 @@ registerAdapter(Nonce, Session, INonce)
 
 class Client(LineReceiver):
 
-    def __init__(self, counter):
+    def __init__(self, nonce):
         self.name = None
-        self.counter = counter
+        self.pin = None
+        self.nonce = nonce
 
     def connectionMade(self):
-        self.sendLine("%s" % self.counter)
+        self.sendLine("%s" % self.nonce)
 
     def lineReceived(self, line):
-        #print("Client lineReceived()")
+        print("Client PIN: %s" % line)
+        self.pin = line
         pass
 
     def handleCommand(self, line):
@@ -166,17 +168,35 @@ class loginCode(Resource):
         session = request.getSession()
         nonce = INonce(session)
         nonce.code = self.code
-        req = self._prepare_from_twisted_request(request)
-        auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
-        redirect = auth.login()
-        request.redirect(redirect)
-        request.finish()
-        return server.NOT_DONE_YET
+        request.setHeader(b"content-type", b"text/html")
+        content =  u"<html>\n<body>\n<form method=POST>\n"
+        content += u"<input type=password name=pin> <input type=submit value=PIN>\n"
+        content += u"</body>\n</html>\n"
+        return content.encode("ascii")
 
     def render_POST(self, request):
         session = request.getSession()
         nonce = INonce(session)
         code = nonce.code
+        args = request.args
+        client = self.client.users.get(code)
+        if client:
+            pin = client.pin
+        else:
+            return "<html><body>Unknown Error</body></html>"
+        if args.get('pin'):
+            if pin in args.get('pin'):
+                # pin ok, prepare SAML authnRequest
+                req = self._prepare_from_twisted_request(request)
+                auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
+                redirect = auth.login()
+                request.redirect(redirect)
+                request.finish()
+                return server.NOT_DONE_YET
+            else:
+                self.client.users[code].handleCommand(" FAIL")
+                return "<html><body>PIN failed!</body></html>"
+
         req = self._prepare_from_twisted_request(request)
         auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
         auth.process_response()
@@ -187,17 +207,17 @@ class loginCode(Resource):
             uid_attr = attributes.get(self.settings.get('user_attribute'))
             if uid_attr:
                 uid = uid_attr[0]
+                self.client.users[code].handleCommand("{} SUCCESS".format(uid))
             else:
-                uid = ''
+                self.client.users[code].handleCommand(" FAIL")
 
-        self.client.users[code].handleCommand("{} SUCCESS".format(uid))
-        print("Destroy %s" % self.code)
+        print("Destroy %s" % code)
         self.client.users.pop(code)
         request.setHeader(b"content-type", b"text/html")
-        content = "<html><body>\n"
+        content =  u"<html>\n<body>\n"
         content += u"{}/{} successfully authenticated<br />\n".format(code, uid)
         content += u"This window may be closed\n"
-        content += "</body></html>\n"
+        content += u"</body>\n</html>\n"
         return content.encode("ascii")
 
 class Server:

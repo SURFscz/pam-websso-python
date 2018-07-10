@@ -37,8 +37,8 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     self.sendLine("%s %s" % (self.pin, self.user+"@"+hostname))
 
   def connectionLost(self, reason):
-    if self.resp != self.pin:
-      self.state = 'failed'
+    if self.resp == self.pin:
+      self.state = 'end'
     if self.timeoutCall.active():
       self.timeoutCall.cancel()
       self.timeoutCall = None
@@ -46,7 +46,7 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
   def lineReceived(self, line):
     self.line = line
     if self.state == 'start':
-      self.state = None
+      self.state = 'failed'
       url = self.settings['sso_url'] % line
       # Future functionality
       #qrcode = pyqrcode.create(url)
@@ -60,7 +60,6 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
       # This line makes WebSSO fall-through immediately if user presses enter before login
       self.transport.loseConnection()
     else:
-      self.state = 'end'
       self.transport.loseConnection()
 
 class WebSSOFactory(ClientFactory, TimeoutFactory):

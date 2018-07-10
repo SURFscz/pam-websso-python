@@ -28,14 +28,16 @@ class Client(LineReceiver):
     def __init__(self, nonce):
         self.name = None
         self.pin = None
+        self.user = None
         self.nonce = nonce
 
     def connectionMade(self):
+        self.remote = self.transport.getPeer().host
         self.sendLine("%s" % self.nonce)
 
     def lineReceived(self, line):
         print("Client PIN: %s" % line)
-        self.pin = line
+        (self.pin, self.user) = line.split(" ")
         pass
 
     def handleCommand(self, line):
@@ -168,9 +170,12 @@ class loginCode(Resource):
         session = request.getSession()
         nonce = INonce(session)
         nonce.code = self.code
+        client = self.client.users.get(self.code)
         request.setHeader(b"content-type", b"text/html")
         content =  u"<html>\n<body>\n<form method=POST>\n"
-        content += u"<input type=password name=pin> <input type=submit value=PIN>\n"
+        content += u"Please authorize SSH login for user {} from IP {}<br />\n".format(client.user, client.remote)
+        content += u"PIN: {} ".format(client.pin)
+        content += u"<input name=action type=submit value=login>\n"
         content += u"</body>\n</html>\n"
         return content.encode("ascii")
 
@@ -184,9 +189,8 @@ class loginCode(Resource):
             pin = client.pin
         else:
             return "<html><body>Unknown Error</body></html>"
-        if args.get('pin'):
-            if pin in args.get('pin'):
-                # pin ok, prepare SAML authnRequest
+        if args.get('action'):
+            if 'login' in args.get('action'):
                 req = self._prepare_from_twisted_request(request)
                 auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
                 redirect = auth.login()

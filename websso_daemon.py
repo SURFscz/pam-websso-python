@@ -174,7 +174,7 @@ class loginCode(Resource):
         request.setHeader(b"content-type", b"text/html")
         content =  u"<html>\n<body>\n<form method=POST>\n"
         content += u"Please authorize SSH login for user {} from IP {}<br />\n".format(client.user, client.remote)
-        content += u"PIN: {} ".format(client.pin)
+        #content += u"PIN: {} ".format(client.pin)
         content += u"<input name=action type=submit value=login>\n"
         content += u"</body>\n</html>\n"
         return content.encode("ascii")
@@ -220,6 +220,7 @@ class loginCode(Resource):
         request.setHeader(b"content-type", b"text/html")
         content =  u"<html>\n<body>\n"
         content += u"{}/{} successfully authenticated<br />\n".format(code, uid)
+        content += u"PIN: {}<br />\n".format(pin)
         content += u"This window may be closed\n"
         content += u"</body>\n</html>\n"
         return content.encode("ascii")

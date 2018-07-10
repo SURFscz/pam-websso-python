@@ -9,10 +9,7 @@ from os import path
 import time
 import json
 import random
-
-def debug(line):
-    with open('/var/log/pam.log', 'a') as f:
-        f.write(line+"\n")
+import socket
 
 def debug(line):
     with open('/var/log/pam_websso.log', 'a') as f:
@@ -22,7 +19,7 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
   line = None
   pamh = None
   settings = None
-  code = None
+  pin = None
   state = 'start'
 
   def __init__(self, pamh, settings):
@@ -30,11 +27,13 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     length = 4
     self.pamh = pamh
     self.settings = settings
-    self.code = ''.join([str(random.choice(chars)) for i in range(length)])
+    self.pin = ''.join([str(random.choice(chars)) for i in range(length)])
+    self.user = pamh.get_user()
 
   def connectionMade(self):
+    hostname = socket.gethostname()
     self.timeoutCall = reactor.callLater(60, self.transport.loseConnection)
-    self.sendLine("%s" % self.code)
+    self.sendLine("%s %s" % (self.pin, self.user+"@"+hostname))
 
   def connectionLost(self, reason):
     if self.timeoutCall.active():
@@ -49,13 +48,15 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
       # Future functionality
       #qrcode = pyqrcode.create(url)
       #msg = "Visit {} to login\nand press <enter> to continue.{}".format(url,qrcode.terminal(quiet_zone=1))
-      msg = "Your PIN: {}\nVisit {} to login\nor press <enter> to continue.".format(self.code, url)
+      msg = "Visit {} to login and enter PIN\nor press <enter> to skip websso: ".format(url)
       msg_type = self.pamh.PAM_PROMPT_ECHO_OFF
       # Can be PAM_TEXT_INFO when OpenSSH fixes https://bugzilla.mindrot.org/show_bug.cgi?id=2876
       #msg_type = self.pamh.PAM_TEXT_INFO
-      self.pamh.conversation(self.pamh.Message(msg_type, msg))
-      # This line makes WebSSO fall-through immediately if user presses enter before login
-      self.transport.loseConnection()
+      response = self.pamh.conversation(self.pamh.Message(msg_type, msg))
+      pin = response.resp
+      if pin != self.pin:
+        # This line makes WebSSO fall-through immediately if user presses enter before login
+        self.transport.loseConnection()
     else:
       self.state = 'end'
       self.transport.loseConnection()
@@ -119,7 +120,7 @@ def pam_sm_authenticate(pamh, flags, argv):
   #pamh.user = user
 
   if result == 'SUCCESS' and auth == user:
-    debug("SUCCESS: %s" % (user))
+    #debug("SUCCESS: %s" % (user))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Success! %s" % (user)))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " user: {}".format(pamh.get_user(None))))

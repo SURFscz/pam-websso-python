@@ -20,6 +20,7 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
   pamh = None
   settings = None
   pin = None
+  resp = None
   state = 'start'
 
   def __init__(self, pamh, settings):
@@ -36,6 +37,8 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     self.sendLine("%s %s" % (self.pin, self.user+"@"+hostname))
 
   def connectionLost(self, reason):
+    if self.resp != self.pin:
+      self.state = 'failed'
     if self.timeoutCall.active():
       self.timeoutCall.cancel()
       self.timeoutCall = None
@@ -53,10 +56,9 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
       # Can be PAM_TEXT_INFO when OpenSSH fixes https://bugzilla.mindrot.org/show_bug.cgi?id=2876
       #msg_type = self.pamh.PAM_TEXT_INFO
       response = self.pamh.conversation(self.pamh.Message(msg_type, msg))
-      pin = response.resp
-      if pin != self.pin:
-        # This line makes WebSSO fall-through immediately if user presses enter before login
-        self.transport.loseConnection()
+      self.resp = response.resp
+      # This line makes WebSSO fall-through immediately if user presses enter before login
+      self.transport.loseConnection()
     else:
       self.state = 'end'
       self.transport.loseConnection()
@@ -109,17 +111,21 @@ def pam_sm_authenticate(pamh, flags, argv):
   #reactor.connectTCP(settings['sso_server'], settings['ports']['clients'], websso)
   reactor.connectSSL(settings['sso_server'], settings['ports']['clients'], websso, ssl.ClientContextFactory())
   reactor.run()
+  state = 'failed'
   auth = 'failed'
   result = 'FAILED'
+  debug('state: {}'.format(websso.client.state))
   try:
+    state = websso.client.state
     (auth, result) = websso.client.line.split(" ")
   except:
     pass
 
   pamh.env['reply'] = result
+  pamh.env['state'] = state
   #pamh.user = user
 
-  if result == 'SUCCESS' and auth == user:
+  if result == 'SUCCESS' and auth == user and state == 'end':
     #debug("SUCCESS: %s" % (user))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Success! %s" % (user)))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))

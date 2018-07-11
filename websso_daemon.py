@@ -42,7 +42,6 @@ class Client(LineReceiver):
         answer = json.loads(line)
         self.pin = answer['pin']
         self.user = answer['user']
-        pass
 
     def handleCommand(self, line):
         #message = "%s" % line

@@ -32,17 +32,21 @@ class Client(LineReceiver):
         self.nonce = nonce
 
     def connectionMade(self):
-        self.remote = self.transport.getPeer().host
-        self.sendLine("%s" % self.nonce)
+        #self.remote = self.transport.getPeer().host
+        msg = { 'nonce': self.nonce }
+        self.sendLine(json.dumps(msg))
 
     def lineReceived(self, line):
-        print("Client PIN: %s" % line)
-        (self.pin, self.user) = line.split(" ")
+        print(line)
+        #(self.pin, self.user) = line.split(" ")
+        answer = json.loads(line)
+        self.pin = answer['pin']
+        self.user = answer['user']
         pass
 
     def handleCommand(self, line):
-        message = "%s" % line
-        self.sendLine(message)
+        #message = "%s" % line
+        self.sendLine(line)
         self.transport.loseConnection()
 
 class ClientFactory(Factory):
@@ -75,7 +79,9 @@ class Command(LineReceiver):
         #print("Command lineReceived()")
         try:
           (nonce, command) = line.split(":")
-          self.client.users[nonce].handleCommand(command)
+          (uid, result) = command.split(" ")
+          msg = { 'uid': uid, 'result': result }
+          self.client.users[nonce].handleCommand(json.dumps(msg))
           self.client.users.pop(nonce)
           print("Destroy %s" % nonce)
         except Exception as e:
@@ -172,11 +178,14 @@ class loginCode(Resource):
         nonce.code = self.code
         client = self.client.users.get(self.code)
         request.setHeader(b"content-type", b"text/html")
-        content =  u"<html>\n<body>\n<form method=POST>\n"
-        content += u"Please authorize SSH login for user {} from IP {}<br />\n".format(client.user, client.remote)
-        #content += u"PIN: {} ".format(client.pin)
-        content += u"<input name=action type=submit value=login>\n"
-        content += u"</body>\n</html>\n"
+        if client:
+          content =  u"<html>\n<body>\n<form method=POST>\n"
+          content += u"Please authorize SSH login for user {}<br />\n".format(client.user)
+          #content += u"PIN: {} ".format(client.pin)
+          content += u"<input name=action type=submit value=login>\n"
+          content += u"</body>\n</html>\n"
+        else:
+          content = u"<html>\n<body>\nUnkown error\n</body>\n</html>\n"
         return content.encode("ascii")
 
     def render_POST(self, request):
@@ -205,21 +214,21 @@ class loginCode(Resource):
         auth = OneLogin_Saml2_Auth(req, old_settings=self.settings)
         auth.process_response()
         errors = auth.get_errors()
+        msg = { 'uid': '', 'result': 'FAIL' }
         if auth.is_authenticated():
             attributes = auth.get_attributes()
             print("attributes: {}".format(attributes))
             uid_attr = attributes.get(self.settings.get('user_attribute'))
             if uid_attr:
-                uid = uid_attr[0]
-                self.client.users[code].handleCommand("{} SUCCESS".format(uid))
-            else:
-                self.client.users[code].handleCommand(" FAIL")
+                msg['uid'] = uid_attr[0]
+                msg['result'] = 'SUCCESS'
+        self.client.users[code].handleCommand(json.dumps(msg))
 
         print("Destroy %s" % code)
         self.client.users.pop(code)
         request.setHeader(b"content-type", b"text/html")
         content =  u"<html>\n<body>\n"
-        content += u"{}/{} successfully authenticated<br />\n".format(code, uid)
+        content += u"{}/{} successfully authenticated<br />\n".format(code, msg['uid'])
         content += u"PIN: {}<br />\n".format(pin)
         content += u"This window may be closed\n"
         content += u"</body>\n</html>\n"

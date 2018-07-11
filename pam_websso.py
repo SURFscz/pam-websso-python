@@ -16,7 +16,7 @@ def debug(line):
         f.write(line+"\n")
 
 class WebSSOClient(LineReceiver, TimeoutProtocol):
-  line = None
+  answer = None
   pamh = None
   settings = None
   pin = None
@@ -32,9 +32,10 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     self.user = pamh.get_user()
 
   def connectionMade(self):
-    hostname = socket.gethostname()
     self.timeoutCall = reactor.callLater(60, self.transport.loseConnection)
-    self.sendLine("%s %s" % (self.pin, self.user+"@"+hostname))
+    hostname = socket.gethostname()
+    msg = {'pin': self.pin, 'user': self.user+"@"+hostname }
+    self.sendLine(json.dumps(msg))
 
   def connectionLost(self, reason):
     if self.resp == self.pin:
@@ -44,17 +45,16 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
       self.timeoutCall = None
 
   def lineReceived(self, line):
-    self.line = line
+    debug(line)
+    self.answer = json.loads(line)
     if self.state == 'start':
       self.state = 'failed'
-      url = self.settings['sso_url'] % line
+      url = self.settings['sso_url'] % self.answer.get('nonce')
       # Future functionality
       #qrcode = pyqrcode.create(url)
       #msg = "Visit {} to login\nand press <enter> to continue.{}".format(url,qrcode.terminal(quiet_zone=1))
       msg = "Visit {} to login and enter PIN\nor press <enter> to skip websso: ".format(url)
       msg_type = self.pamh.PAM_PROMPT_ECHO_OFF
-      # Can be PAM_TEXT_INFO when OpenSSH fixes https://bugzilla.mindrot.org/show_bug.cgi?id=2876
-      #msg_type = self.pamh.PAM_TEXT_INFO
       response = self.pamh.conversation(self.pamh.Message(msg_type, msg))
       self.resp = response.resp
       # This line makes WebSSO fall-through immediately if user presses enter before login
@@ -92,7 +92,7 @@ def pam_sm_authenticate(pamh, flags, argv):
   settings = json.load(json_data_file)
 
   try:
-    user = pamh.get_user("Get User")
+    user = pamh.get_user()
     pamh.env['user'] = user
   except pamh.exception, e:
     return e.pam_result
@@ -111,24 +111,24 @@ def pam_sm_authenticate(pamh, flags, argv):
   reactor.connectSSL(settings['sso_server'], settings['ports']['clients'], websso, ssl.ClientContextFactory())
   reactor.run()
   state = 'failed'
-  auth = 'failed'
   result = 'FAILED'
-  debug('state: {}'.format(websso.client.state))
+  uid = 'failed'
   try:
+    #(auth, result) = websso.client.line.split(" ")
     state = websso.client.state
-    (auth, result) = websso.client.line.split(" ")
+    result = websso.client.answer.get('result')
+    uid = websso.client.answer.get('uid')
   except:
     pass
 
-  pamh.env['reply'] = result
+  #debug('state: {} {} {}'.format(uid, result, state))
   pamh.env['state'] = state
-  #pamh.user = user
+  pamh.env['result'] = result.encode('ascii')
+  pamh.env['uid'] = uid.encode('ascii')
 
-  if result == 'SUCCESS' and auth == user and state == 'end':
-    #debug("SUCCESS: %s" % (user))
+  if result == 'SUCCESS' and uid == user and state == 'end':
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Success! %s" % (user)))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
-    pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " user: {}".format(pamh.get_user(None))))
     return pamh.PAM_SUCCESS
   else:
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))

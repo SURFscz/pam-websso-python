@@ -27,11 +27,12 @@ Authentication flow
 1. User starts ssh process using commandline ssh command:
 ```$ ssh user@vm.server.org```
 2. SSH will consult that pam_websso module for authentication
-3. pam_websso will contact websso_daemon and receive a unique nonce, keeps connection open
+3. pam_websso will contact websso_daemon, send a pin and receive a unique nonce, keeps connection open
 4. pam_websso displays the SAML SP URL+nonce challenge to the user (URL is served by websso_daemon)
-5. User opens URL and authenticates at IdP of choice
-6. websso_daemon relates SAML authentication to requested URL+nonce and answers PAM client ```"<user> <RESULT>"```
-7. pam_websso receives ```"<user> <RESULT>"``` line
-8. pam_websso checks for ```<RESULT>=="SUCCESS"``` and ```<user>==user``` and returns ```PAM_SUCCESS``` if correct
-9. In all other cases pam_websso returns ```PAM_AUTH_ERR```.
-10. SSH will check if user exists on local system.
+5. User may press <enter> now, to skip websso authentication, or
+6. User opens URL and authenticates at IdP of choice
+7. websso_daemon relates SAML authentication to requested URL+nonce, shows authentication result + pin and informs PAM client of authenticated user and result.
+8. pam_websso receives user and authentication result line
+9. pam_websso checks for ```<RESULT>=="SUCCESS"```, ```<user>==user``` and ```<pin>=pin``` returns ```PAM_SUCCESS``` if correct
+10. In all other cases pam_websso returns ```PAM_AUTH_ERR```.
+11. SSH will check if user exists on local system.

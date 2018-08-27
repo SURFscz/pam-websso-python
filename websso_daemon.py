@@ -25,15 +25,15 @@ registerAdapter(Nonce, Session, INonce)
 
 class Client(LineReceiver):
 
-    def __init__(self, nonce):
+    def __init__(self, url):
         self.name = None
         self.pin = None
         self.user = None
-        self.nonce = nonce
+        self.url = url
 
     def connectionMade(self):
         #self.remote = self.transport.getPeer().host
-        msg = { 'nonce': self.nonce }
+        msg = { 'url': self.url }
         self.sendLine(json.dumps(msg))
 
     def lineReceived(self, line):
@@ -50,17 +50,20 @@ class Client(LineReceiver):
 
 class ClientFactory(Factory):
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
+    settings = None
 
     def _nonce(self, length=8):
       return ''.join([str(random.choice(self.chars)) for i in range(length)])
 
-    def __init__(self):
+    def __init__(self, settings):
         self.users = {} # maps user nonces to Client instances
+        self.settings = settings
 
     def buildProtocol(self, addr):
         nonce = self._nonce()
+        url = self.settings['url'] % nonce
         print("Create %s" % nonce)
-        user = Client(nonce)
+        user = Client(url)
         self.users[nonce] = user
         return user
 
@@ -240,7 +243,7 @@ class Server:
         filename = my_base + "/websso_daemon.json"
         json_data_file = open(filename, 'r')
         self.settings = json.load(json_data_file)
-        self.clients = ClientFactory()
+        self.clients = ClientFactory(self.settings)
         self.command = CommandFactory(self.clients)
         root = NoResource()
         root.putChild('login', Login(self.clients))

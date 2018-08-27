@@ -3,5 +3,4 @@
         "clients": 8123,
         },
     "sso_server": "localhost",
-    "sso_url": "http://sso_url/%s"
 }

@@ -49,7 +49,7 @@ class WebSSOClient(LineReceiver, TimeoutProtocol):
     self.answer = json.loads(line)
     if self.state == 'start':
       self.state = 'failed'
-      url = self.settings['sso_url'] % self.answer.get('nonce')
+      url = self.answer.get('url')
       # Future functionality
       #qrcode = pyqrcode.create(url)
       #msg = "Visit {} to login\nand press <enter> to continue.{}".format(url,qrcode.terminal(quiet_zone=1))

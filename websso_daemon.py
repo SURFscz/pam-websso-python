@@ -61,7 +61,7 @@ class ClientFactory(Factory):
 
     def buildProtocol(self, addr):
         nonce = self._nonce()
-        url = self.settings['url'] % nonce
+        url = self.settings['url'] + "login/%s" % nonce
         print("Create %s" % nonce)
         user = Client(url)
         self.users[nonce] = user

@@ -5,10 +5,9 @@ This module consists of two parts: A PAM module and a websso daemon.
 The PAM module runs on the host(s) that is supposed to accept SAML WebSSO login.
 WebSSO Daemon runs on a server that handles SAML authentication (SP).
 
-Edit pam_websso.json to configure remote host and port of WebSSO Daemon and SSO URL. The URL should contain a %s to substitute the requested nonce.
-websso_daemon.json should contain configuration for three ports: the clients port (on which the PAM modules connect) the Command port (on which authentication
-requests can manually be authenticated for test purposes. This port will only bind to localhost for security reasons. The web port is the HTTP interface
-that will serve the SAML SP. The rest of the configuration file is OneLogin Python SAML configuration. See https://github.com/onelogin/python-saml.
+Edit pam_websso.json to configure remote host and port of WebSSO Daemon.
+websso_daemon.json should contain configuration for three ports: the clients port (on which the PAM modules connect) the Command port (on which authentication requests can manually be authenticated for test purposes). This port will only bind to localhost for security reasons.
+The web port is the HTTP interface that will serve the SAML SP and SSO URL. The URL should contain a %s to substitute the requested nonce. The rest of the configuration file is OneLogin Python SAML configuration. See https://github.com/onelogin/python-saml.
 
 Add these lines to /etc/pam.d/sshd
 

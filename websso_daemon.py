@@ -3,100 +3,119 @@ from twisted.python.components import registerAdapter
 from twisted.internet.protocol import Factory
 from twisted.protocols.basic import LineReceiver
 from twisted.web.resource import Resource, NoResource
-from twisted.internet import reactor, endpoints
+from twisted.internet import reactor
 from twisted.web import server
-from twisted.web.server import Session
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 from onelogin.saml2.settings import OneLogin_Saml2_Settings
 from onelogin.saml2.utils import OneLogin_Saml2_Utils
 from os import path
+from threading import Timer
 import random
 import json
 
-class INonce(Interface):
-    code = Attribute("The original nonce")
+class ISession(Interface):
+    nonce = Attribute("The original nonce")
 
-@implementer(INonce)
-class Nonce(object):
+@implementer(ISession)
+class Session(object):
     def __init__(self, sesion):
-        self.code = 0
+        self.nonce = 0
 
-registerAdapter(Nonce, Session, INonce)
+registerAdapter(Session, server.Session, ISession)
 
-class Client(LineReceiver):
-
-    def __init__(self, url):
-        self.name = None
-        self.pin = None
-        self.user = None
-        self.url = url
-
-    def connectionMade(self):
-        #self.remote = self.transport.getPeer().host
-        msg = { 'url': self.url }
-        self.sendLine(json.dumps(msg))
-
-    def lineReceived(self, line):
-        print(line)
-        #(self.pin, self.user) = line.split(" ")
-        answer = json.loads(line)
-        self.pin = answer['pin']
-        self.user = answer['user']
-
-    def handleCommand(self, line):
-        #message = "%s" % line
-        self.sendLine(line)
-        self.transport.loseConnection()
-
-class ClientFactory(Factory):
+class Client(Resource, object):
     chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
     settings = None
+    clients = {}
+    auths = {}
+
+    def __init__(self, settings):
+        Resource.__init__(self)
+        #print("Client __init__")
+        self.settings = settings
 
     def _nonce(self, length=8):
       return ''.join([str(random.choice(self.chars)) for i in range(length)])
 
-    def __init__(self, settings):
-        self.users = {} # maps user nonces to Client instances
-        self.settings = settings
+    def getChild(self, name, request):
+        if name == 'req':
+            return self
+        elif name == 'auth':
+            print("args: {}".format(request.args))
+            nonce = request.args.get('nonce', [None])[0]
+            auth = self.auths.pop(nonce, " FAIL")
+            args = self.clients.pop(nonce, None)
+            if args:
+                return ClientAuth(auth)
+            else:
+                return ClientError()
+        else:
+            return ClientError()
 
-    def buildProtocol(self, addr):
+    def handleCommand(self, nonce, msg):
+        self.auths[nonce] = msg
+        Timer(60, lambda: self.auths.pop(nonce, None)).start()
+
+    def render_POST(self, request):
+        #print("Client render_POST")
         nonce = self._nonce()
-        url = self.settings['url'] + "login/%s" % nonce
-        print("Create %s" % nonce)
-        user = Client(url)
-        self.users[nonce] = user
-        return user
+        msg = { 'nonce': nonce, 'url': self.settings['url'] + "login/%s" % nonce }
+        self.clients[nonce] = request.args
+        Timer(60, lambda: self.clients.pop(nonce, None)).start()
+        print("new: {}, {}".format(nonce, request.args))
+        return json.dumps(msg).encode("ascii")
+
+class ClientError(Resource, object):
+
+    def __init__(self):
+        Resource.__init__(self)
+
+    def render(self, request):
+        request.setResponseCode(400, 'Something went wrong!')
+        return "Error"
+
+class ClientAuth(Resource, object):
+    isLeaf = True
+
+    def __init__(self, auth):
+        Resource.__init__(self)
+        print("ClientAuth __init__ {}".format(auth))
+        self.auth = auth
+
+    def render_POST(self, request):
+        #print("ClientAuth render_POST")
+        return self.auth
 
 class Command(LineReceiver):
 
-    def __init__(self, ClientFactory):
-        self.client = ClientFactory
+    def __init__(self, client):
+        self.client = client
 
     def connectionMade(self):
-        print("Command connection")
-        for user in self.client.users:
-          self.sendLine("%s" % user)
+        #print("Command connection")
+        for nonce, args in self.client.clients.iteritems():
+            self.sendLine("{}: {}".format(nonce, args))
+        #for nonce, args in self.client.auths.items():
+            #self.sendLine("{}: {}".format(nonce, args))
 
     def lineReceived(self, line):
-        #print("Command lineReceived()")
         try:
-          (nonce, command) = line.split(":")
-          (uid, result) = command.split(" ")
-          msg = { 'uid': uid, 'result': result }
-          self.client.users[nonce].handleCommand(json.dumps(msg))
-          self.client.users.pop(nonce)
-          print("Destroy %s" % nonce)
+            (nonce, command) = line.split(":")
+            (uid, result) = command.split(" ")
+            msg = { 'uid': uid, 'result': result }
+            self.client.handleCommand(nonce, json.dumps(msg))
         except Exception as e:
-          print(e)
+            #print(e)
+            pass
         self.transport.loseConnection()
 
 class CommandFactory(Factory):
 
-    def __init__(self, ClientFactory):
-        self.clientfactory = ClientFactory
+    def __init__(self, client):
+        self.client = client
 
     def buildProtocol(self, addr):
-        return Command(self.clientfactory)
+        return Command(self.client)
 
 class Metadata(Resource):
 
@@ -130,13 +149,13 @@ class Metadata(Resource):
 
 class Login(Resource):
 
-    def __init__(self, clientfactory):
+    def __init__(self, client):
         Resource.__init__(self)
-        self.clientfactory = clientfactory
+        self.client = client
 
     def getChild(self, name, request):
         if name:
-            return loginCode(name, self.clientfactory)
+            return loginCode(name, self.client)
         else:
             return self
 
@@ -148,19 +167,19 @@ class Login(Resource):
 
 class loginCode(Resource):
     isLeaf = True
-    code = None
+    nonce = None
     client = None
     settings = None
 
-    def __init__(self, code, client):
+    def __init__(self, nonce, client):
         Resource.__init__(self)
-        self.code = code
+        self.nonce = nonce
         self.client = client
         my_base = path.dirname(path.realpath(__file__))
         filename = my_base + "/websso_daemon.json"
         json_data_file = open(filename, 'r')
         self.settings = json.load(json_data_file)
-        print("loginCode: {}".format(code))
+        print("loginCode: {}".format(nonce))
 
     def _simplify_args(self, args):
         return { key: val[0] for key, val in args.iteritems() }
@@ -176,14 +195,14 @@ class loginCode(Resource):
 
     def render_GET(self, request):
         session = request.getSession()
-        nonce = INonce(session)
-        nonce.code = self.code
-        client = self.client.users.get(self.code)
+        s = ISession(session)
+        s.nonce = self.nonce
+        client = self.client.clients.get(self.nonce, None)
+        user = client['user'][0] if client else "Error"
         request.setHeader(b"content-type", b"text/html")
         if client:
           content =  u"<html>\n<body>\n<form method=POST>\n"
-          content += u"Please authorize SSH login for user {}<br />\n".format(client.user)
-          #content += u"PIN: {} ".format(client.pin)
+          content += u"Please authorize SSH login for user {}<br />\n".format(user)
           content += u"<input name=action type=submit value=login>\n"
           content += u"</body>\n</html>\n"
         else:
@@ -192,12 +211,12 @@ class loginCode(Resource):
 
     def render_POST(self, request):
         session = request.getSession()
-        nonce = INonce(session)
-        code = nonce.code
+        s = ISession(session)
+        nonce = s.nonce
         args = request.args
-        client = self.client.users.get(code)
+        client = self.client.clients.get(nonce)
         if client:
-            pin = client.pin
+            pin = client['pin'][0]
         else:
             return "<html><body>Unknown Error</body></html>"
         if args.get('action'):
@@ -209,7 +228,7 @@ class loginCode(Resource):
                 request.finish()
                 return server.NOT_DONE_YET
             else:
-                self.client.users[code].handleCommand(" FAIL")
+                self.client.handleCommand(nonce, " FAIL")
                 return "<html><body>PIN failed!</body></html>"
 
         req = self._prepare_from_twisted_request(request)
@@ -224,13 +243,13 @@ class loginCode(Resource):
             if uid_attr:
                 msg['uid'] = uid_attr[0]
                 msg['result'] = 'SUCCESS'
-        self.client.users[code].handleCommand(json.dumps(msg))
+        self.client.handleCommand(nonce, json.dumps(msg))
 
-        print("Destroy %s" % code)
-        self.client.users.pop(code)
+        #print("Destroy %s" % nonce)
+        #self.client.clients.pop(nonce)
         request.setHeader(b"content-type", b"text/html")
         content =  u"<html>\n<body>\n"
-        content += u"{}/{} successfully authenticated<br />\n".format(code, msg['uid'])
+        content += u"{}/{} successfully authenticated<br />\n".format(nonce, msg['uid'])
         content += u"PIN: {}<br />\n".format(pin)
         content += u"This window may be closed\n"
         content += u"</body>\n</html>\n"
@@ -243,17 +262,23 @@ class Server:
         filename = my_base + "/websso_daemon.json"
         json_data_file = open(filename, 'r')
         self.settings = json.load(json_data_file)
-        self.clients = ClientFactory(self.settings)
-        self.command = CommandFactory(self.clients)
-        root = NoResource()
-        root.putChild('login', Login(self.clients))
+
+        # Client channel
+        client = Client(self.settings)
+        self.clients = server.Site(client)
+
+        # Command channel
+        self.command = CommandFactory(client)
+
+        # WebSSO channel
+        root = client
+        root.putChild('login', Login(client))
         root.putChild('md', Metadata())
         self.web = server.Site(root)
 
     def start(self):
         reactor.listenTCP(self.settings['ports']['clients'], self.clients)
         reactor.listenTCP(self.settings['ports']['command'], self.command, interface='localhost')
-        reactor.listenTCP(self.settings['ports']['web'], self.web)
         reactor.run()
 
 Server().start()

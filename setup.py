@@ -11,7 +11,8 @@ setup(name='pam-websso',
           'Twisted',
           'python-saml',
           'pyOpenSSL',
-          'service_identity'
+          'service_identity',
+          'requests'
           ],
       zip_safe=False
       )

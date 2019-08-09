@@ -1,0 +1,29 @@
+version: '2'
+
+services:
+
+  web:
+    build: build
+    volumes:
+      - ./etc/websso_daemon.json:/pam-websso/websso_daemon.json
+    ports:
+      - "8080:80"
+    command:
+      - python
+      - websso_daemon.py
+
+  ssh:
+    build: build
+    hostname: "server"
+    volumes:
+      - ./etc/pam_websso.json:/pam-websso/pam_websso.json
+    links:
+      - web
+    ports:
+      - "2222:22"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        useradd testuser
+        /usr/sbin/sshd -D

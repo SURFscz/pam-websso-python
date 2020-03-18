@@ -1,3 +1,8 @@
+# Workaround for CVE-2019-16729
+# https://sourceforge.net/p/pam-python/tickets/8/
+import site
+site.main()
+
 from OpenSSL import SSL
 from os import path
 # Future functionality

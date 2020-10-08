@@ -9,7 +9,7 @@ setup(name='pam-websso',
       license='GPL',
       install_requires=[
           'Twisted',
-          'python-saml',
+          'python3-saml',
           'pyOpenSSL',
           'service_identity',
           'requests'

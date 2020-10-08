@@ -1,7 +1,7 @@
 {
     "ports": {
         "clients": 8123,
-        "command": 8124,
+        "command": 8124
     },
     "url": "https://sso.url/",
     "strict": false,

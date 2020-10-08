@@ -272,8 +272,8 @@ class Server:
 
         # WebSSO channel
         root = client
-        root.putChild('login', Login(client))
-        root.putChild('md', Metadata())
+        root.putChild(b'login', Login(client))
+        root.putChild(b'md', Metadata())
         self.web = server.Site(root)
 
     def start(self):

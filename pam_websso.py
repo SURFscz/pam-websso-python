@@ -29,7 +29,7 @@ def pam_sm_authenticate(pamh, flags, argv):
   try:
     user = pamh.get_user()
     pamh.env['user'] = user
-  except pamh.exception, e:
+  except pamh.exception as e:
     return e.pam_result
 
   # It is not (yet) possible in OpenSSH to
@@ -40,47 +40,47 @@ def pam_sm_authenticate(pamh, flags, argv):
     #return pamh.PAM_IGNORE
 
   hostname = socket.gethostname()
-  chars = '1234567890'
-  length = 4
-  pin = ''.join([str(random.choice(chars)) for i in range(length)])
-  payload = {'pin': pin, 'user': user+"@"+hostname }
+  uid = user+"@"+hostname
+  payload = {'user': uid }
   try:
     r = requests.post(url = settings['sso_server'] + '/req', data = payload, timeout=1)
   except:
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))
     return pamh.PAM_AUTH_ERR
 
-  msg = json.loads(r.text)
+  r = json.loads(r.text)
 
-  nonce = msg['nonce']
-  url = msg['url']
+  nonce = r['nonce']
+  pin = r['pin']
+  hot = r['hot']
+  challenge = r['challenge']
 
-  prompt = "Visit {} to login and enter PIN\nor press <enter> to skip websso: ".format(url)
-  msg_type = pamh.PAM_PROMPT_ECHO_OFF
-  response = pamh.conversation(pamh.Message(msg_type, prompt))
-  resp = response.resp
+  if not hot:
+    msg_type = pamh.PAM_PROMPT_ECHO_OFF
+    response = pamh.conversation(pamh.Message(msg_type, challenge.encode('ascii')))
+    resp = response.resp
 
-  if resp != pin:
-    pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))
-    return pamh.PAM_AUTH_ERR
+    if resp != pin:
+      pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))
+      return pamh.PAM_AUTH_ERR
 
-  payload = { 'nonce': nonce }
+    payload = { 'nonce': nonce }
 
-  try:
-    r = requests.post(url = settings['sso_server'] + '/auth', data = payload, timeout=300)
-  except:
-    pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))
-    return pamh.PAM_AUTH_ERR
+    try:
+      r = requests.post(url = settings['sso_server'] + '/auth', data = payload, timeout=300)
+    except:
+      pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Fail! %s" % (user)))
+      return pamh.PAM_AUTH_ERR
 
-  msg = json.loads(r.text)
+    msg = json.loads(r.text)
 
-  result = msg['result']
-  uid = msg['uid']
+    result = msg['result']
+    uid = msg['uid']
+    pamh.env['result'] = result.encode('ascii')
 
-  pamh.env['result'] = result.encode('ascii')
   pamh.env['uid'] = uid.encode('ascii')
 
-  if uid == user and result == 'SUCCESS':
+  if hot or result == 'SUCCESS':
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, "Success! %s" % (user)))
     pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
     return pamh.PAM_SUCCESS
@@ -89,7 +89,9 @@ def pam_sm_authenticate(pamh, flags, argv):
     return pamh.PAM_AUTH_ERR
 
 def pam_sm_setcred(pamh, flags, argv):
-  return pamh.PAM_IGNORE
+  # We need to return PAM_SUCCESS on setcred
+  # to enable pubkey + passwordless keyboard-interactive
+  return pamh.PAM_SUCCESS
 
 def pam_sm_acct_mgmt(pamh, flags, argv):
   return pamh.PAM_IGNORE
@@ -105,7 +107,5 @@ def pam_sm_chauthtok(pamh, flags, argv):
 
 def pam_sm_end(pamh):
   # OpenSSH does not call pam_sm_end
-  #pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " Env: {}".format({key:val for key,val in pamh.env.iteritems()})))
-  #pamh.conversation(pamh.Message(pamh.PAM_TEXT_INFO, " user: {}".format(pamh.get_user(None))))
   return pamh.PAM_SUCCESS
 

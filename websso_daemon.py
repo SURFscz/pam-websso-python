@@ -50,8 +50,11 @@ class Client(Resource, object):
             print("args: {}".format(request.args))
             nonce = request.args.get('nonce', [None])[0]
             auth = self._pop_auth(nonce)
-            args = self.clients.pop(nonce, None)
-            if args:
+            print("auth: {}".format(auth))
+            if auth.get('result') == "SUCCESS":
+                user = auth.get('uid')
+                self.hots[user] = True
+                Timer(60, self._pop_hot, [user]).start()
                 return ClientAuth(auth)
             else:
                 return ClientError()
@@ -60,20 +63,15 @@ class Client(Resource, object):
 
     def _pop_auth(self, nonce):
         print("pop auth {}".format(nonce))
-        return self.auths.pop(nonce, "FAIL")
+        return self.auths.pop(nonce, {})
 
     def _pop_hot(self, user):
         print("pop hot {}".format(user))
         self.hots.pop(user, None)
 
     def handleCommand(self, nonce, msg):
-        user = msg.get('uid')
-        self.auths[nonce] = json.dumps(msg)
-        self.hots[user] = True
-        #Timer(60, lambda: self.auths.pop(nonce, None)).start()
-        #Timer(60, lambda: self.hots.pop(user, None)).start()
+        self.auths[nonce] = msg
         Timer(60, self._pop_auth, [nonce]).start()
-        Timer(60, self._pop_hot, [user]).start()
 
     def render_POST(self, request):
         #print("Client render_POST")
@@ -110,7 +108,7 @@ class ClientAuth(Resource, object):
 
     def render_POST(self, request):
         #print("ClientAuth render_POST")
-        return self.auth
+        return json.dumps(self.auth)
 
 class Login(Resource):
 

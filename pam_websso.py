@@ -54,6 +54,7 @@ def pam_sm_authenticate(pamh, flags, argv):
   pin = r['pin']
   hot = r['hot']
   challenge = r['challenge']
+  result = "FAIL"
 
   if not hot:
     msg_type = pamh.PAM_PROMPT_ECHO_OFF

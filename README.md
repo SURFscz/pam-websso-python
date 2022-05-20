@@ -1,3 +1,8 @@
+> NOTE: this repository is obsolete; this code here depends on pam-python, which is hardly supported any more, and should not be considered safe
+> for production use.  
+> 
+> The pam-websso functionality has been rewritten from scratch and is now available in [SURFscz/pam-weblogin](https://github.com/SURFscz/pam-weblogin)
+
 # pam-websso
 (SAML) WebSSO PAM Module
 
